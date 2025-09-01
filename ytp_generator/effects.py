@@ -110,27 +110,74 @@ def _build_stutter_cmd(ffmpeg_path, input_path, output_path, repeats=4):
         # don't delete immediately; ffmpeg may still read files when returning command list
         shutil.rmtree(tmpdir, ignore_errors=True)
 
+def _get_duration_with_ffprobe(ffprobe_path, input_path):
+    """Return duration in seconds using ffprobe. Raises subprocess.CalledProcessError on failure."""
+    cmd = [ffprobe_path, "-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", input_path]
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+    out = proc.stdout.strip()
+    try:
+        return float(out)
+    except Exception:
+        # As a fallback try parsing stderr for duration-like strings
+        raise ValueError(f"Could not parse duration from ffprobe output: {out!r}")
+
+def _find_ffprobe(ffmpeg_path):
+    """Try to locate ffprobe. Prefer same directory as ffmpeg_path, then system PATH 'ffprobe'."""
+    # If ffmpeg_path is full path, check same dir for ffprobe
+    try:
+        ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_path))
+        candidate = os.path.join(ffmpeg_dir, "ffprobe")
+        candidate_exe = candidate + (".exe" if os.name == "nt" else "")
+        if os.path.isfile(candidate_exe):
+            return candidate_exe
+        # try 'ffprobe' on PATH
+        from shutil import which
+        wp = which("ffprobe")
+        if wp:
+            return wp
+    except Exception:
+        pass
+    # fallback to 'ffprobe' (may fail later if not installed)
+    return "ffprobe"
+
 def _build_random_cuts_cmd(ffmpeg_path, input_path, output_path, effect_conf):
-    # Split file into N cuts and re-order randomly then concat.
-    import math
-    import tempfile
-    from moviepy.editor import VideoFileClip  # optional, but this is a scaffold path if moviepy is installed
+    """
+    Split file into N cuts and re-order randomly then concat.
+    This implementation uses ffprobe (preferred) to get duration instead of moviepy so
+    it works when moviepy is not installed.
+    """
     tmpdir = tempfile.mkdtemp(prefix="cuts_")
     try:
-        clip = VideoFileClip(input_path)
-        duration = clip.duration
+        # find ffprobe
+        ffprobe = _find_ffprobe(ffmpeg_path)
+        # get duration
+        try:
+            duration = _get_duration_with_ffprobe(ffprobe, input_path)
+        except Exception as e:
+            # If ffprobe fails, raise informative error
+            raise RuntimeError(f"Unable to determine input duration (ffprobe error): {e}")
+        if duration <= 0:
+            raise RuntimeError("Input duration is zero or could not be determined.")
+
         cuts = random.randint(effect_conf.get("min_cuts", 2), effect_conf.get("max_cuts", 6))
-        # Determine cut times
-        times = sorted([0.0] + [random.uniform(0.0, duration) for _ in range(cuts - 1)] + [duration])
+        # create unique random cut points (exclude 0 and duration)
+        points = sorted({round(random.uniform(0.0, duration), 6) for _ in range(cuts - 1)})
+        times = [0.0] + points + [duration]
         pieces = []
         for i in range(len(times)-1):
-            start = times[i]
-            end = times[i+1]
+            start = max(0.0, times[i])
+            end = min(duration, times[i+1])
+            # ensure minimal length
+            if end - start < 0.05:
+                # skip extremely short pieces
+                continue
             out_piece = os.path.join(tmpdir, f"piece_{i:03d}.mp4")
-            # write using ffmpeg
-            cmd = [ffmpeg_path, "-y", "-loglevel", "warning", "-i", input_path, "-ss", str(start), "-to", str(end), "-c", "copy", out_piece]
+            # Use -ss ... -to ... -i ... -c copy for faster cutting where possible.
+            cmd = [ffmpeg_path, "-y", "-loglevel", "warning", "-ss", str(start), "-to", str(end), "-i", input_path, "-c", "copy", out_piece]
             subprocess.run(cmd, check=True)
             pieces.append(out_piece)
+        if not pieces:
+            raise RuntimeError("No pieces were created for random cuts.")
         random.shuffle(pieces)
         list_file = os.path.join(tmpdir, "concat_list.txt")
         with open(list_file, "w", encoding="utf-8") as f:
@@ -139,4 +186,5 @@ def _build_random_cuts_cmd(ffmpeg_path, input_path, output_path, effect_conf):
         final_cmd = [ffmpeg_path, "-y", "-loglevel", "warning", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", output_path]
         return final_cmd
     finally:
+        # cleanup; if ffmpeg still reading files this will be ignored/raise but we ignore errors
         shutil.rmtree(tmpdir, ignore_errors=True)
