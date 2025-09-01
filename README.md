@@ -1,4 +1,3 @@
-```markdown
 # YTP Deluxe Generator (Windows 8.1 + ffmpeg)
 
 A Python-based YouTube Poop (YTP) deluxe generator scaffold and implementation for Windows 8.1 environments using ffmpeg. This project provides a CLI and a simple Tkinter GUI (Windows-compatible) plus modular effect functions (many implemented with ffmpeg filterchains). It is designed to be runnable on older Windows with a local ffmpeg binary (provide full path to ffmpeg.exe in the config if needed).
