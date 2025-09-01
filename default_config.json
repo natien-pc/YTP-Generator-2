@@ -1,0 +1,23 @@
+{
+  "ffmpeg_path": "ffmpeg",
+  "assets_dir": "assets",
+  "effect_chain": [
+    {"name": "random_sound_overlay", "enabled": true, "probability": 0.9, "max_sounds": 2},
+    {"name": "reverse", "enabled": true, "probability": 0.15},
+    {"name": "speed_change", "enabled": true, "probability": 0.5, "min_factor": 0.25, "max_factor": 3.0},
+    {"name": "chorus", "enabled": true, "probability": 0.25, "level": 0.8},
+    {"name": "vibrato", "enabled": true, "probability": 0.2, "depth": 0.8},
+    {"name": "stutter", "enabled": true, "probability": 0.3, "max_repeats": 6},
+    {"name": "earrape", "enabled": true, "probability": 0.05, "gain_db": 20},
+    {"name": "autotune_chaos", "enabled": false, "probability": 0.1},
+    {"name": "dance_squidward", "enabled": true, "probability": 0.25},
+    {"name": "invert_colors", "enabled": true, "probability": 0.15},
+    {"name": "rainbow_overlay", "enabled": true, "probability": 0.25},
+    {"name": "mirror", "enabled": true, "probability": 0.1},
+    {"name": "sus_effect", "enabled": true, "probability": 0.2},
+    {"name": "explosion_spam", "enabled": true, "probability": 0.12},
+    {"name": "frame_shuffle", "enabled": true, "probability": 0.2},
+    {"name": "meme_injection", "enabled": true, "probability": 0.4},
+    {"name": "random_cuts", "enabled": true, "probability": 0.8, "min_cuts": 2, "max_cuts": 8}
+  ]
+}
